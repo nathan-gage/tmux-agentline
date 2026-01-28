@@ -1,30 +1,31 @@
-# tmux-stat
+# tmux-agentline
 
-A tmux plugin that displays real-time Claude Code status indicators in your status line.
+A tmux plugin that displays real-time AI agent status indicators in your status line and window list.
 
 ## Features
 
-- Shows when Claude is **running** (actively working)
-- Alerts when Claude needs **attention** (permission prompts, waiting for input)
-- Indicates when Claude is **done** (finished responding)
-- Aggregates status across all tmux panes running Claude
+- Shows when an agent is **running** (actively working)
+- Alerts when an agent needs **attention** (permission prompts)
+- Indicates when an agent is **done** (finished or idle)
+- Per-window status indicators in the window list
+- Aggregated status in the status bar
+- Automatic cleanup when panes are closed
 - Customizable icons and colors
 
 ## Requirements
 
 - tmux 2.1+
 - [jq](https://stedolan.github.io/jq/) for JSON parsing
-- [Claude Code](https://claude.ai/claude-code) CLI
-- A [Nerd Font](https://www.nerdfonts.com/) for default icons (or customize your own)
+- [Claude Code](https://claude.ai/code) CLI
 
 ## Installation
 
-### With [TPM](https://github.com/tmux-plugins/tpm) (recommended)
+### With [TPM](https://github.com/tmux-plugins/tpm)
 
 Add to your `~/.tmux.conf`:
 
 ```tmux
-set -g @plugin 'ngage/tmux-stat'
+set -g @plugin 'nathan-gage/tmux-agentline'
 ```
 
 Press `prefix + I` to install.
@@ -32,13 +33,13 @@ Press `prefix + I` to install.
 ### Manual Installation
 
 ```bash
-git clone https://github.com/ngage/tmux-stat ~/.tmux/plugins/tmux-stat
+git clone https://github.com/nathan-gage/tmux-agentline ~/.tmux/plugins/tmux-agentline
 ```
 
 Add to `~/.tmux.conf`:
 
 ```tmux
-run-shell ~/.tmux/plugins/tmux-stat/tmux-stat.tmux
+run-shell ~/.tmux/plugins/tmux-agentline/tmux-agentline.tmux
 ```
 
 ### Configure Claude Code Hooks
@@ -46,17 +47,28 @@ run-shell ~/.tmux/plugins/tmux-stat/tmux-stat.tmux
 Run the installer to set up Claude Code hooks:
 
 ```bash
-~/.tmux/plugins/tmux-stat/scripts/install-hooks.sh
+~/.tmux/plugins/tmux-agentline/scripts/install-hooks.sh
 ```
 
 This adds the necessary hooks to `~/.claude/settings.json`.
 
 ## Usage
 
+### Status Bar
+
 Add `#{claude_status}` to your status line:
 
 ```tmux
-set -g status-right "#{claude_status} | %H:%M"
+set -g status-right "#{claude_status} %H:%M"
+```
+
+### Window List
+
+Add per-window indicators:
+
+```tmux
+set -g window-status-format '#I:#W#(~/.tmux/plugins/tmux-agentline/scripts/window-status.sh #{window_id})'
+set -g window-status-current-format '#I:#W#(~/.tmux/plugins/tmux-agentline/scripts/window-status.sh #{window_id})'
 ```
 
 Reload tmux configuration:
@@ -69,11 +81,11 @@ tmux source ~/.tmux.conf
 
 | Icon | Color | Meaning |
 |------|-------|---------|
-|  | Yellow | Claude is actively working |
-|  | Red | Claude needs your attention |
-|  | Green | Claude has finished |
+| ● | Yellow | Agent is actively working |
+| ! | Red | Agent needs your attention |
+| ✓ | Green | Agent has finished |
 
-When multiple panes have the same status, a count is shown (e.g., ` 3`).
+When multiple panes have the same status, a count is shown (e.g., `●2`).
 
 Priority order: attention > running > done
 
@@ -82,9 +94,9 @@ Priority order: attention > running > done
 ### Icons
 
 ```tmux
-set -g @claude_status_icon_running ""
-set -g @claude_status_icon_attention ""
-set -g @claude_status_icon_done ""
+set -g @claude_status_icon_running "●"
+set -g @claude_status_icon_attention "!"
+set -g @claude_status_icon_done "✓"
 ```
 
 ### Colors/Styles
@@ -97,33 +109,18 @@ set -g @claude_status_done "#[fg=green]"
 
 ## How It Works
 
-1. Claude Code hooks trigger on various events (tool use, permission requests, etc.)
+1. Claude Code hooks trigger on events (tool use, permission requests, etc.)
 2. Hook scripts update state files in `~/.claude/tmux-stat/`
-3. The status script reads state files and outputs the appropriate indicator
-4. tmux refreshes the status line to show the current state
-
-### State Files
-
-State is tracked per-pane in `~/.claude/tmux-stat/<pane_id>.state`:
-
-```json
-{
-  "status": "running",
-  "timestamp": 1706000000,
-  "session_id": "abc123",
-  "tmux_window": "@1",
-  "message": "Using tool: Read"
-}
-```
-
-Stale states (>5 minutes old) are automatically cleaned up.
+3. Status scripts read state files and output indicators
+4. tmux refreshes to show the current state
+5. State files are automatically cleaned up when panes close
 
 ## Uninstallation
 
 Remove hooks from Claude settings:
 
 ```bash
-~/.tmux/plugins/tmux-stat/scripts/install-hooks.sh uninstall
+~/.tmux/plugins/tmux-agentline/scripts/install-hooks.sh uninstall
 ```
 
 Then remove the plugin from your `~/.tmux.conf`.
@@ -134,11 +131,7 @@ Then remove the plugin from your `~/.tmux.conf`.
 
 1. Verify hooks are installed: `cat ~/.claude/settings.json | jq '.hooks'`
 2. Check state directory exists: `ls ~/.claude/tmux-stat/`
-3. Ensure scripts are executable: `ls -la ~/.tmux/plugins/tmux-stat/scripts/`
-
-### Icons not displaying
-
-Install a [Nerd Font](https://www.nerdfonts.com/) and configure your terminal to use it, or customize the icons to use standard Unicode or ASCII characters.
+3. Ensure scripts are executable: `ls -la ~/.tmux/plugins/tmux-agentline/scripts/`
 
 ### jq not found
 
