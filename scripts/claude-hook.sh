@@ -114,9 +114,6 @@ main() {
     local json_input
     json_input=$(read_input)
 
-    # Debug: log raw input (remove this line after debugging)
-    echo "$(date +%s) $json_input" >> /tmp/claude-hook-debug.log
-
     # Get pane ID from environment
     local pane_id
     pane_id=$(get_current_pane_id)
