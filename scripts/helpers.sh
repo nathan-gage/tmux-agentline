@@ -44,10 +44,10 @@ write_state() {
     ensure_state_dir
     state_file=$(get_state_file "$pane_id")
 
-    # Get tmux window if available
+    # Get tmux window for this specific pane (not the active window)
     local tmux_window=""
-    if [[ -n "${TMUX:-}" ]]; then
-        tmux_window=$(tmux display-message -p '#{window_id}' 2>/dev/null || echo "")
+    if [[ -n "${TMUX:-}" && -n "$pane_id" ]]; then
+        tmux_window=$(tmux display-message -t "$pane_id" -p '#{window_id}' 2>/dev/null || echo "")
     fi
 
     # Create JSON state file
@@ -92,7 +92,13 @@ get_tmux_option() {
     fi
 }
 
-# Clean up stale state files (older than 5 minutes)
+# Check if a tmux pane exists
+pane_exists() {
+    local pane_id="$1"
+    tmux list-panes -a -F '#{pane_id}' 2>/dev/null | grep -q "^${pane_id}$"
+}
+
+# Clean up stale state files (older than 5 minutes OR pane no longer exists)
 cleanup_stale_states() {
     local max_age=300  # 5 minutes in seconds
     local now
@@ -108,6 +114,18 @@ cleanup_stale_states() {
     for state_file in "$STATE_DIR"/*.state; do
         [[ -f "$state_file" ]] || continue
 
+        # Extract pane ID from filename (e.g., 337.state -> %337)
+        local pane_num
+        pane_num=$(basename "$state_file" .state)
+        local pane_id="%${pane_num}"
+
+        # Remove if pane no longer exists (skip during tests)
+        if [[ -z "${TMUX_STAT_SKIP_PANE_CHECK:-}" ]] && ! pane_exists "$pane_id"; then
+            rm -f "$state_file"
+            continue
+        fi
+
+        # Remove if too old
         local timestamp
         timestamp=$(jq -r '.timestamp // 0' "$state_file" 2>/dev/null || echo "0")
 

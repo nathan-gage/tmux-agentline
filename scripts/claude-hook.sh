@@ -36,10 +36,14 @@ determine_state() {
         Notification)
             # Check the notification type
             local notification_type
-            notification_type=$(json_field "$json_input" '.notification.type')
+            notification_type=$(json_field "$json_input" '.notification_type')
             case "$notification_type" in
-                permission_prompt|idle_prompt|elicitation_dialog)
+                permission_prompt|elicitation_dialog)
                     echo "attention"
+                    ;;
+                idle_prompt)
+                    # Idle means waiting for user input - not active, not needing attention
+                    echo "done"
                     ;;
                 *)
                     # Other notifications don't change state
@@ -78,7 +82,7 @@ get_message() {
             ;;
         Notification)
             local notification_type
-            notification_type=$(json_field "$json_input" '.notification.type')
+            notification_type=$(json_field "$json_input" '.notification_type')
             case "$notification_type" in
                 permission_prompt)
                     echo "Permission prompt"
@@ -110,6 +114,9 @@ main() {
     local json_input
     json_input=$(read_input)
 
+    # Debug: log raw input (remove this line after debugging)
+    echo "$(date +%s) $json_input" >> /tmp/claude-hook-debug.log
+
     # Get pane ID from environment
     local pane_id
     pane_id=$(get_current_pane_id)
@@ -121,19 +128,7 @@ main() {
 
     # Determine hook type from the input
     local hook_type
-    hook_type=$(json_field "$json_input" '.hook')
-
-    if [[ -z "$hook_type" ]]; then
-        # Try alternate field names based on hook structure
-        # SessionStart/SessionEnd have different structure
-        if [[ $(json_field "$json_input" '.session_id') != "" ]]; then
-            # Could be SessionStart or SessionEnd based on context
-            # Check for session-specific fields
-            if [[ $(json_field "$json_input" '.cwd') != "" ]]; then
-                hook_type="SessionStart"
-            fi
-        fi
-    fi
+    hook_type=$(json_field "$json_input" '.hook_event_name')
 
     # Get session ID if available
     local session_id

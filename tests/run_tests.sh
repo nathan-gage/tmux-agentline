@@ -17,6 +17,8 @@ NC='\033[0m'
 
 # Override STATE_DIR for tests
 export STATE_DIR="$TEST_STATE_DIR"
+# Skip pane existence check during tests
+export TMUX_STAT_SKIP_PANE_CHECK=1
 
 # Test utilities
 setup() {
@@ -239,7 +241,7 @@ test_hook_session_start() {
 
     export TMUX_PANE="%100"
     export STATE_DIR="$TEST_STATE_DIR"
-    echo '{"hook": "SessionStart", "session_id": "sess1", "cwd": "/tmp"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
+    echo '{"hook_event_name": "SessionStart", "session_id": "sess1", "cwd": "/tmp"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
 
     assert_file_exists "${TEST_STATE_DIR}/100.state" "SessionStart creates state file"
     assert_json_field "${TEST_STATE_DIR}/100.state" ".status" "running" "SessionStart sets status to running"
@@ -253,7 +255,7 @@ test_hook_pre_tool_use() {
 
     export TMUX_PANE="%101"
     export STATE_DIR="$TEST_STATE_DIR"
-    echo '{"hook": "PreToolUse", "tool_name": "Read", "session_id": "sess2"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
+    echo '{"hook_event_name": "PreToolUse", "tool_name": "Read", "session_id": "sess2"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
 
     assert_file_exists "${TEST_STATE_DIR}/101.state" "PreToolUse creates state file"
     assert_json_field "${TEST_STATE_DIR}/101.state" ".status" "running" "PreToolUse sets status to running"
@@ -268,7 +270,7 @@ test_hook_permission_request() {
 
     export TMUX_PANE="%102"
     export STATE_DIR="$TEST_STATE_DIR"
-    echo '{"hook": "PermissionRequest", "tool_name": "Bash", "session_id": "sess3"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
+    echo '{"hook_event_name": "PermissionRequest", "tool_name": "Bash", "session_id": "sess3"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
 
     assert_json_field "${TEST_STATE_DIR}/102.state" ".status" "attention" "PermissionRequest sets status to attention"
 
@@ -281,7 +283,7 @@ test_hook_notification_permission() {
 
     export TMUX_PANE="%103"
     export STATE_DIR="$TEST_STATE_DIR"
-    echo '{"hook": "Notification", "notification": {"type": "permission_prompt"}, "session_id": "sess4"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
+    echo '{"hook_event_name": "Notification", "notification_type": "permission_prompt", "session_id": "sess4"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
 
     assert_json_field "${TEST_STATE_DIR}/103.state" ".status" "attention" "Notification permission_prompt sets attention"
 
@@ -294,9 +296,9 @@ test_hook_notification_idle() {
 
     export TMUX_PANE="%104"
     export STATE_DIR="$TEST_STATE_DIR"
-    echo '{"hook": "Notification", "notification": {"type": "idle_prompt"}, "session_id": "sess5"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
+    echo '{"hook_event_name": "Notification", "notification_type": "idle_prompt", "session_id": "sess5"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
 
-    assert_json_field "${TEST_STATE_DIR}/104.state" ".status" "attention" "Notification idle_prompt sets attention"
+    assert_json_field "${TEST_STATE_DIR}/104.state" ".status" "done" "Notification idle_prompt sets done (not attention)"
 
     teardown
 }
@@ -307,7 +309,7 @@ test_hook_stop() {
 
     export TMUX_PANE="%105"
     export STATE_DIR="$TEST_STATE_DIR"
-    echo '{"hook": "Stop", "reason": "completed", "session_id": "sess6"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
+    echo '{"hook_event_name": "Stop", "reason": "completed", "session_id": "sess6"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
 
     assert_json_field "${TEST_STATE_DIR}/105.state" ".status" "done" "Stop sets status to done"
 
@@ -324,7 +326,7 @@ test_hook_session_end() {
     echo '{"status": "done"}' > "${TEST_STATE_DIR}/106.state"
 
     # Then send SessionEnd
-    echo '{"hook": "SessionEnd", "session_id": "sess7"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
+    echo '{"hook_event_name": "SessionEnd", "session_id": "sess7"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
 
     assert_file_not_exists "${TEST_STATE_DIR}/106.state" "SessionEnd removes state file"
 
@@ -337,7 +339,7 @@ test_hook_no_tmux_pane() {
 
     unset TMUX_PANE
     export STATE_DIR="$TEST_STATE_DIR"
-    echo '{"hook": "SessionStart", "session_id": "sess8"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
+    echo '{"hook_event_name": "SessionStart", "session_id": "sess8"}' | "${PLUGIN_DIR}/scripts/claude-hook.sh"
 
     # Should not create any files
     local count
