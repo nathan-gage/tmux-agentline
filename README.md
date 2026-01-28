@@ -12,11 +12,16 @@ A tmux plugin that displays real-time AI agent status indicators in your status 
 - Automatic cleanup when panes are closed
 - Customizable icons and colors
 
+## Supported Agents
+
+- [Claude Code](https://claude.ai/code) CLI (full support via hooks)
+- [OpenAI Codex CLI](https://github.com/openai/codex) (via OTEL integration)
+
 ## Requirements
 
 - tmux 2.1+
 - [jq](https://stedolan.github.io/jq/) for JSON parsing
-- [Claude Code](https://claude.ai/code) CLI
+- Python 3.8+ (for Codex OTEL integration)
 
 ## Installation
 
@@ -42,15 +47,34 @@ Add to `~/.tmux.conf`:
 run-shell ~/.tmux/plugins/tmux-agentline/tmux-agentline.tmux
 ```
 
-### Configure Claude Code Hooks
+### Configure Agent Hooks
 
-Run the installer to set up Claude Code hooks:
+Run the installer to set up hooks:
 
 ```bash
+# Install both Claude Code and Codex CLI hooks
 ~/.tmux/plugins/tmux-agentline/scripts/install-hooks.sh
+
+# Or install individually:
+~/.tmux/plugins/tmux-agentline/scripts/install-hooks.sh install-claude      # Claude Code only
+~/.tmux/plugins/tmux-agentline/scripts/install-hooks.sh install-codex-otel  # Codex CLI (OTEL)
 ```
 
-This adds the necessary hooks to `~/.claude/settings.json`.
+This adds the necessary hooks to `~/.claude/settings.json` and/or `~/.codex/config.toml`.
+
+### Codex CLI Setup
+
+For Codex CLI, use the wrapper script to enable status tracking:
+
+```bash
+# Add to your shell config (~/.bashrc or ~/.zshrc)
+alias codex='~/.tmux/plugins/tmux-agentline/scripts/codex-wrapper.sh'
+```
+
+The wrapper automatically:
+- Starts the OTEL receiver if not running
+- Registers your tmux pane for status tracking
+- Cleans up on exit
 
 ## Usage
 
@@ -109,18 +133,59 @@ set -g @claude_status_done "#[fg=green]"
 
 ## How It Works
 
+### Claude Code
+
 1. Claude Code hooks trigger on events (tool use, permission requests, etc.)
 2. Hook scripts update state files in `~/.claude/tmux-stat/`
 3. Status scripts read state files and output indicators
 4. tmux refreshes to show the current state
 5. State files are automatically cleaned up when panes close
 
+### Codex CLI (OTEL)
+
+```
+┌─────────────────┐    Registration    ┌──────────────────────┐
+│ codex-wrapper.sh│◄──────────────────►│  otel-receiver.py    │
+│ (sets PANE_ID)  │                    │  (localhost:4319)    │
+└────────┬────────┘                    └──────────┬───────────┘
+         │                                        │
+         │ exec codex                   OTEL HTTP POST
+         ▼                                        │
+┌─────────────────┐                              │
+│   Codex CLI     │──────────────────────────────┘
+└─────────────────┘                    ┌──────────────────────┐
+                                       │ ~/.claude/tmux-stat/ │
+                                       │   <pane>.state       │
+                                       └──────────────────────┘
+```
+
+1. Wrapper script registers the tmux pane with the OTEL receiver
+2. Codex CLI sends OpenTelemetry events to the receiver
+3. Receiver maps events to states and writes state files
+4. Receiver auto-shuts down after 5 minutes of inactivity
+
+#### Codex Event Mapping
+
+| Codex OTEL Event | State | Indicator |
+|------------------|-------|-----------|
+| `codex.conversation_starts` | running | Yellow ● |
+| `codex.tool_decision` (pending) | attention | Red ! |
+| `codex.tool_decision` (approved) | running | Yellow ● |
+| `codex.tool_result` (success) | running | Yellow ● |
+| `codex.tool_result` (failed) | attention | Red ! |
+| `codex.conversation_ends` | done | Green ✓ |
+
 ## Uninstallation
 
-Remove hooks from Claude settings:
+Remove hooks:
 
 ```bash
+# Remove all hooks
 ~/.tmux/plugins/tmux-agentline/scripts/install-hooks.sh uninstall
+
+# Or remove individually:
+~/.tmux/plugins/tmux-agentline/scripts/install-hooks.sh uninstall-claude
+~/.tmux/plugins/tmux-agentline/scripts/install-hooks.sh uninstall-codex-otel
 ```
 
 Then remove the plugin from your `~/.tmux.conf`.
@@ -139,6 +204,28 @@ Install jq:
 - macOS: `brew install jq`
 - Ubuntu/Debian: `apt install jq`
 - Fedora: `dnf install jq`
+
+### Codex status not showing
+
+1. Ensure you're using the wrapper alias, not `codex` directly
+2. Check OTEL receiver is running: `curl http://localhost:4319/health`
+3. Verify OTEL config in `~/.codex/config.toml`:
+   ```toml
+   [otel]
+   environment = "dev"
+
+   [otel.exporter.otlp-http]
+   endpoint = "http://127.0.0.1:4319"
+   protocol = "json"
+   ```
+4. Check state files: `ls ~/.claude/tmux-stat/*.state`
+
+### Codex OTEL errors in terminal
+
+If you see `BatchLogProcessor.ExportError` messages, the OTEL receiver isn't running. Either:
+- Use the wrapper alias (auto-starts receiver)
+- Reload tmux config to start receiver: `tmux source ~/.tmux.conf`
+- Start manually: `~/.tmux/plugins/tmux-agentline/scripts/otel-receiver.py &`
 
 ## License
 

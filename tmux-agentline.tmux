@@ -80,11 +80,33 @@ ensure_state_directory() {
     mkdir -p "${HOME}/.claude/tmux-stat"
 }
 
+# Start OTEL receiver if not running
+start_otel_receiver() {
+    local receiver_script="${CURRENT_DIR}/scripts/otel-receiver.py"
+    local pid_file="${HOME}/.claude/tmux-stat/otel-receiver.pid"
+
+    # Check if already running
+    if [[ -f "$pid_file" ]]; then
+        local pid
+        pid=$(cat "$pid_file" 2>/dev/null || echo "")
+        if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    # Start receiver in background
+    if [[ -x "$receiver_script" ]]; then
+        nohup "$receiver_script" > /dev/null 2>&1 &
+        echo $! > "$pid_file"
+    fi
+}
+
 main() {
     set_defaults
     ensure_state_directory
     setup_interpolation
     setup_cleanup_hooks
+    start_otel_receiver
 }
 
 main
